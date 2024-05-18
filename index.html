@@ -74,6 +74,14 @@
             cursor: not-allowed;
         }
 
+        .clear-button {
+            background-color: #dc3545;
+        }
+
+        .clear-button:hover {
+            background-color: #c82333;
+        }
+
         img {
             max-width: 100%;
             height: auto;
@@ -150,6 +158,7 @@
             <input type="text" id="queryInput" placeholder="Enter your query..." required>
             <button type="submit" id="generateButton">Generate Image</button>
         </form>
+        <button id="clearHistoryButton" class="clear-button">Clear History</button>
         <div id="loading">Loading...</div>
         <div id="status" class="status-text"></div>
     </div>
@@ -157,7 +166,10 @@
     <script>
         let activeRequests = 0;
 
-        document.addEventListener('DOMContentLoaded', updateLoadingMessage);
+        document.addEventListener('DOMContentLoaded', () => {
+            updateLoadingMessage();
+            loadImageHistory(); // Carrega o histórico de imagens ao carregar a página
+        });
 
         async function query(data) {
             const headers = {
@@ -190,6 +202,7 @@
                 const imageBlob = await query({ inputs: queryValue });
                 const imageUrl = URL.createObjectURL(imageBlob);
                 addImageToHistory(imageUrl);
+                saveImageToLocalStorage(imageUrl);
             } catch (error) {
                 console.error("Error occurred while processing the request:", error);
                 alert("Sorry, an error occurred while processing your request: " + error.message);
@@ -204,7 +217,7 @@
             const img = document.createElement("img");
             img.src = imageUrl;
             img.classList.add("history-image");
-            historyContainer.insertBefore(img, historyContainer.firstChild); // Add new image at the top
+            historyContainer.insertBefore(img, historyContainer.firstChild); // Adiciona a nova imagem no topo
         }
 
         function updateLoadingMessage() {
@@ -219,6 +232,24 @@
             }
         }
 
+        function saveImageToLocalStorage(imageUrl) {
+            const currentHistory = JSON.parse(localStorage.getItem('imageHistory')) || [];
+            currentHistory.unshift(imageUrl); // Adiciona a nova imagem no início do array
+            localStorage.setItem('imageHistory', JSON.stringify(currentHistory));
+        }
+
+        function loadImageHistory() {
+            const historyContainer = document.getElementById("imageHistory");
+            const storedHistory = JSON.parse(localStorage.getItem('imageHistory')) || [];
+            storedHistory.forEach(imageUrl => addImageToHistory(imageUrl));
+        }
+
+        function clearImageHistory() {
+            localStorage.removeItem('imageHistory');
+            const historyContainer = document.getElementById("imageHistory");
+            historyContainer.innerHTML = ''; // Remove todas as imagens do histórico
+        }
+
         document.getElementById("imageForm").addEventListener("submit", function (event) {
             event.preventDefault();
             const queryInput = document.getElementById("queryInput");
@@ -226,6 +257,12 @@
             if (queryValue) {
                 generateImage(queryValue);
                 queryInput.value = "";
+            }
+        });
+
+        document.getElementById("clearHistoryButton").addEventListener("click", function () {
+            if (confirm("Are you sure you want to clear the image history?")) {
+                clearImageHistory();
             }
         });
     </script>
