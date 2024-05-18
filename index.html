@@ -68,7 +68,7 @@
         }
         #loading {
             color: #fff;
-            display: none;
+            display: none; /* Ensure it starts hidden */
             margin-bottom: 10px;
         }
         .history {
@@ -89,83 +89,101 @@
             height: auto;
             border-radius: 5px;
         }
+        .status-text {
+            font-size: 0.9em;
+            margin-top: 5px;
+            color: #999;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="history" id="imageHistory"></div>
         <form id="imageForm">
-            <input type="text" id="queryInput" placeholder="Enter your query...">
+            <input type="text" id="queryInput" placeholder="Enter your query..." required>
             <button type="submit" id="generateButton">Generate Image</button>
         </form>
         <div id="loading">Loading...</div>
+        <div id="status" class="status-text"></div>
     </div>
 
     <script>
-        const imageHistory = [];
+        let activeRequests = 0;
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            updateLoadingMessage(); // Initial call to set the correct UI state
+        });
 
         async function query(data) {
-            const response = await fetch(
-                "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
-                {
-                    headers: { Authorization: "Bearer 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" },
-                    method: "POST",
-                    body: JSON.stringify(data),
+            try {
+                const response = await fetch(
+                    "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
+                    {
+                        headers: { Authorization: "Bearer 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" },
+                        method: "POST",
+                        body: JSON.stringify(data),
+                    }
+                );
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Failed to fetch image: ${errorData.error || response.statusText}`);
                 }
-            );
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`Failed to fetch image: ${errorData.error || response.statusText}`);
+                return await response.blob();
+            } catch (error) {
+                console.error("Error querying the API:", error);
+                throw error;
             }
-            return await response.blob();
         }
 
-        async function generateImage() {
-            const queryInput = document.getElementById("queryInput");
-            const queryValue = queryInput.value.trim();
-            const loading = document.getElementById("loading");
-            const historyContainer = document.getElementById("imageHistory");
-            const generateButton = document.getElementById("generateButton");
-
-            if (queryValue === "") {
-                alert("Please enter a query.");
-                return; // Exit if no input is provided
-            }
-
-            loading.style.display = "block";
-            generateButton.disabled = true;
+        async function generateImage(queryValue) {
+            const status = document.getElementById("status");
 
             try {
-                const imageBlob = await query({ "inputs": queryValue });
+                activeRequests++;
+                updateLoadingMessage();
+
+                console.log("Sending query to generate image:", queryValue);
+                const imageBlob = await query({ inputs: queryValue });
                 const imageUrl = URL.createObjectURL(imageBlob);
-                imageHistory.unshift(imageUrl); // Add the new image URL at the
-                // Update the DOM with the new image
-                updateHistory(historyContainer);
-                queryInput.value = ""; // Clear the input field after processing
+                addImageToHistory(imageUrl);
             } catch (error) {
                 console.error("Error occurred while processing the request:", error);
                 alert("Sorry, an error occurred while processing your request: " + error.message);
             } finally {
-                loading.style.display = "none";
-                generateButton.disabled = false;
+                activeRequests--;
+                updateLoadingMessage();
             }
         }
 
-        function updateHistory(historyContainer) {
-            historyContainer.innerHTML = ""; // Clear the current content
+        function addImageToHistory(imageUrl) {
+            const historyContainer = document.getElementById("imageHistory");
+            const img = document.createElement("img");
+            img.src = imageUrl;
+            img.classList.add("history-image");
+            historyContainer.insertBefore(img, historyContainer.firstChild); // Add new image at the top
+        }
 
-            imageHistory.forEach(imageUrl => {
-                const img = document.createElement("img");
-                img.src = imageUrl;
-                img.classList.add("history-image");
-                historyContainer.appendChild(img);
-            });
+        function updateLoadingMessage() {
+            const loading = document.getElementById("loading");
+            const status = document.getElementById("status");
+            if (activeRequests > 0) {
+                loading.style.display = "block";
+                status.textContent = `Generating ${activeRequests} image(s)...`;
+            } else {
+                loading.style.display = "none";
+                status.textContent = "";
+            }
         }
 
         // Add the submit event to the form
         document.getElementById("imageForm").addEventListener("submit", function(event) {
             event.preventDefault(); // Prevent the default form submission behavior
-            generateImage();
+            const queryInput = document.getElementById("queryInput");
+            const queryValue = queryInput.value.trim();
+            if (queryValue) {
+                generateImage(queryValue);
+                queryInput.value = ""; // Clear input after submission
+            }
         });
     </script>
 </body>
